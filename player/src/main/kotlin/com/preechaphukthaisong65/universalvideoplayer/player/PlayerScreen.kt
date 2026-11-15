@@ -98,7 +98,7 @@ fun PlayerScreen(
                         useController = true
                         setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
                         this.resizeMode = resizeMode
-                        keepScreenOn = playing && keepScreenOn
+                        this.keepScreenOn = playing && keepScreenOn
                     }
                 },
                 update = { view ->
