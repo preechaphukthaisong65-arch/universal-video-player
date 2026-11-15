@@ -1,0 +1,5 @@
+plugins {
+    id("org.jetbrains.kotlin.jvm")
+}
+dependencies { implementation(project(":core-common")) }
+kotlin { jvmToolchain(17) }
