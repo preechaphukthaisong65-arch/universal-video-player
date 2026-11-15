@@ -14,8 +14,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -37,7 +35,6 @@ import androidx.media3.common.Player
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.delay
-import kotlin.math.roundToInt
 
 @Composable
 fun PlayerScreen(
@@ -133,11 +130,13 @@ fun PlayerScreen(
             Modifier.fillMaxWidth().padding(8.dp),
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
+            TextButton(onClick = { manager.playPrevious() }, enabled = !locked) { Text("ก่อนหน้า") }
             TextButton(onClick = { manager.seekBy(-10_000L) }, enabled = !locked) { Text("−10 วิ") }
             Button(onClick = {
                 if (player.isPlaying) player.pause() else player.play()
             }, enabled = !locked) { Text(if (playing) "หยุดชั่วคราว" else "เล่น") }
             TextButton(onClick = { manager.seekBy(10_000L) }, enabled = !locked) { Text("+10 วิ") }
+            TextButton(onClick = { manager.playNext() }, enabled = !locked && player.hasNextMediaItem()) { Text("ถัดไป") }
         }
 
         Row(
