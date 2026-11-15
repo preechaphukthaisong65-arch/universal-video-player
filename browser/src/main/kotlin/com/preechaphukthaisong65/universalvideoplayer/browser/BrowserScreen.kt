@@ -21,8 +21,8 @@ import java.net.URI
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun BrowserScreen(modifier: Modifier = Modifier) {
-    var address by remember { mutableStateOf("https://") }
-    var currentUrl by remember { mutableStateOf("https://") }
+    var address by remember { mutableStateOf("") }
+    var currentUrl by remember { mutableStateOf("about:blank") }
     Column(modifier.fillMaxSize()) {
         OutlinedTextField(
             value = address,
@@ -50,6 +50,9 @@ fun BrowserScreen(modifier: Modifier = Modifier) {
                     settings.javaScriptCanOpenWindowsAutomatically = false
                     settings.mediaPlaybackRequiresUserGesture = true
                     settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
+                    settings.safeBrowsingEnabled = true
+                    settings.setSupportMultipleWindows(false)
+                    android.webkit.CookieManager.getInstance().setAcceptThirdPartyCookies(this, false)
                     webViewClient = object : WebViewClient() {
                         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                             val uri = request.url
@@ -57,7 +60,7 @@ fun BrowserScreen(modifier: Modifier = Modifier) {
                         }
                     }
                     webChromeClient = WebChromeClient()
-                    loadUrl("https://")
+                    loadUrl("about:blank")
                 }
             },
             update = { if (currentUrl.startsWith("https://") && it.url != currentUrl) it.loadUrl(currentUrl) }
