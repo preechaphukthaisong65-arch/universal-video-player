@@ -52,12 +52,23 @@ jobs:
           printf '%s' "$BASE64_CLEAN" | base64 --decode > "$KEYSTORE"
           test -s "$KEYSTORE"
 
-          if ! CERT_OUTPUT="$(keytool -list -v -keystore "$KEYSTORE" -storetype PKCS12 -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$NORMALIZED_KEY_ALIAS" 2>&1)"; then
-            echo "Keystore could not be opened. Check the Base64 secret, store password, and alias in GitHub Actions Secrets."
-            printf '%s\n' "$CERT_OUTPUT" | sed -E 's/.*([Pp]assword).*/[password diagnostic redacted]/'
+          if ! KEY_LIST="$(keytool -list -keystore "$KEYSTORE" -storetype PKCS12 -storepass "$ANDROID_KEYSTORE_PASSWORD" 2>&1)"; then
+            echo "Keystore could not be opened. Check the Base64 secret and store password."
+            printf '%s\\n' "$KEY_LIST" | sed -E 's/.*([Pp]assword).*/[password diagnostic redacted]/'
             exit 1
           fi
-          ACTUAL_CERT_SHA256="$(printf '%s\n' "$CERT_OUTPUT" | awk -F': ' '/SHA256:/ {gsub(/:/, "", $2); print tolower($2); exit}')"
+          DETECTED_ALIAS="$(printf '%s\\n' "$KEY_LIST" | awk -F, '$3 ~ /PrivateKeyEntry/ {gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1); print $1}')"
+          ALIAS_COUNT="$(printf '%s\\n' "$DETECTED_ALIAS" | awk 'NF {count++} END {print count+0}')"
+          if [ "$ALIAS_COUNT" -ne 1 ]; then
+            echo "Expected exactly one PrivateKeyEntry in the release keystore; found $ALIAS_COUNT. Refusing to guess the signing key."
+            exit 1
+          fi
+          echo "ANDROID_KEY_ALIAS=$DETECTED_ALIAS" >> "$GITHUB_ENV"
+          if ! CERT_OUTPUT="$(keytool -list -v -keystore "$KEYSTORE" -storetype PKCS12 -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$DETECTED_ALIAS" 2>&1)"; then
+            echo "Detected private-key alias could not be inspected."
+            exit 1
+          fi
+          ACTUAL_CERT_SHA256="$(printf '%s\\n' "$CERT_OUTPUT" | awk -F': ' '/SHA256:/ {gsub(/:/, "", $2); print tolower($2); exit}')"
           if [ -z "$ACTUAL_CERT_SHA256" ] || [ "$ACTUAL_CERT_SHA256" != "$EXPECTED_CERT_SHA256" ]; then
             echo "Keystore certificate fingerprint mismatch. Expected $EXPECTED_CERT_SHA256, received ${ACTUAL_CERT_SHA256:-empty}."
             exit 1
