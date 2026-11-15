@@ -15,10 +15,11 @@ CI success proves source compilation and the configured checks only. It does not
 - One application-scoped Media3 ExoPlayer.
 - Multi-file queue, previous/next, queue selection, seek and speed controls.
 - Audio/text track selection and external SRT/VTT attachment.
-- Fit/Zoom/Fill modes, touch lock and keep-screen-awake preference.
+- Fit/Zoom/Fill modes, horizontal swipe seeking, touch lock and keep-screen-awake preference.
 - Audio-focus and noisy-route handling.
 - Room playback history with periodic position persistence and resume from a selected history item.
 - User-visible playback error message.
+- Position snapshots are read on the ExoPlayer application thread and written to Room on IO; DAO updates avoid replacing the entire row during progress saves.
 
 ### File intake and library
 - ACTION_VIEW, ACTION_SEND and ACTION_SEND_MULTIPLE routing.
@@ -33,6 +34,9 @@ CI success proves source compilation and the configured checks only. It does not
 - Local bookmarks and history; stored URLs omit query strings and fragments.
 - User-triggered cookie/session clearing.
 - JavaScript preference is stored locally and applied to active WebViews.
+- HTTPS-only DownloadManager handoff; Browser cookies are deliberately not copied to downloads.
+- HTML5 custom-view fullscreen support.
+- Direct media URL handoff by recognized file extension to the shared ExoPlayer instance; adaptive/blob/DRM stream detection is not claimed.
 
 ### Settings and release preparation
 - Local preferences for keep-screen-awake and Browser JavaScript.
@@ -43,14 +47,14 @@ CI success proves source compilation and the configured checks only. It does not
 
 ## Still requires implementation
 
-- Player gesture seek/double-tap controls.
-- Browser downloads (only when explicitly permitted), fullscreen HTML5 video and safe media handoff to the shared Player.
+- Double-tap seek controls and broader gesture/accessibility refinements.
+- More comprehensive Browser media detection for adaptive streams where permitted; direct file-URL handoff is implemented.
 - Library sorting and richer file metadata.
 - Complete settings, localization and remaining accessibility polish.
 
 ## Still requires verification
 
-- Instrumentation/UI tests for lifecycle, interruptions, queue transitions, persisted SAF grants and Browser tab lifecycle.
+- Instrumentation/UI tests for lifecycle, interruptions, queue transitions, persisted SAF grants and Browser tab lifecycle. Current instrumentation tests cover the singleton Player, Room progress persistence, Activity recreation and rejection of insecure Browser download URLs.
 - Physical-device testing on at least two Android devices for MP4, MKV, WebM, audio-only and SRT/VTT.
 - Test SAF access after reboot and after provider permission revocation.
 - Browser tests across at least ten website categories, memory/renderer stability, redirects and cookie/session behavior.
