@@ -11,12 +11,19 @@ val keystorePassword = providers.environmentVariable("ANDROID_KEYSTORE_PASSWORD"
 val keyAliasValue = providers.environmentVariable("ANDROID_KEY_ALIAS").orNull
 val keyPasswordValue = providers.environmentVariable("ANDROID_KEY_PASSWORD").orNull
 val releaseSigningReady = listOf(keystoreBase64, keystorePassword, keyAliasValue, keyPasswordValue).all { !it.isNullOrBlank() }
+val requireReleaseSigning = providers.gradleProperty("requireReleaseSigning").orNull == "true"
 val generatedKeystore = layout.buildDirectory.file("signing/release.p12")
+
+if (requireReleaseSigning && !releaseSigningReady) {
+    error("Release signing is required but one or more ANDROID_KEYSTORE_* environment variables are missing.")
+}
 
 if (releaseSigningReady) {
     val outputFile = generatedKeystore.get().asFile
     outputFile.parentFile.mkdirs()
-    outputFile.writeBytes(Base64.getDecoder().decode(keystoreBase64))
+    val decodedKeystore = Base64.getMimeDecoder().decode(keystoreBase64)
+    require(decodedKeystore.isNotEmpty()) { "ANDROID_KEYSTORE_BASE64 decoded to an empty keystore." }
+    outputFile.writeBytes(decodedKeystore)
 }
 
 android {
