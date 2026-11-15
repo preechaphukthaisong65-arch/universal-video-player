@@ -66,13 +66,14 @@ fun BrowserScreen(modifier: Modifier = Modifier) {
         val value = input.trim()
         if (value.isEmpty()) return
         val destination = runCatching {
-            if (value.any(Char::isWhitespace) || (!value.contains('.') && !value.contains("://") && !value.contains(':'))) {
-                "https://www.google.com/search?q=" +
+            if (value.any { it.isWhitespace() } || (!value.contains('.') && !value.contains("://") && !value.contains(':'))) {
+                "https://duckduckgo.com/?q=" +
                     URLEncoder.encode(value, StandardCharsets.UTF_8.name())
             } else {
                 val candidate = if (value.contains("://")) value else "https://$value"
                 val parsed = URI(candidate)
                 require(parsed.scheme.equals("https", ignoreCase = true) && !parsed.host.isNullOrBlank())
+                require(parsed.rawUserInfo == null) { "Embedded URL credentials are not allowed" }
                 parsed.toASCIIString()
             }
         }.getOrNull() ?: return
