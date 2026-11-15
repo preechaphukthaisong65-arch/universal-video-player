@@ -12,6 +12,7 @@ import com.preechaphukthaisong65.universalvideoplayer.player.PlayerSessionManage
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -43,7 +44,7 @@ class PlayerLifecycleInstrumentedTest {
     }
 
     @Test
-    fun roomPersistsResumePosition() = runBlocking {
+    fun roomPersistsAndUpdatesResumePositionWithoutReplacingTheRow() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val database = Room.inMemoryDatabaseBuilder(
             context,
@@ -51,16 +52,26 @@ class PlayerLifecycleInstrumentedTest {
         ).allowMainThreadQueries().build()
 
         try {
+            val dao = database.historyDao()
             val entity = PlaybackHistoryEntity(
                 uri = "content://test/media/one",
                 title = "Test media",
-                lastPositionMs = 12_345L,
+                lastPositionMs = 0L,
                 lastPlayedAt = 1_700_000_000_000L
             )
-            database.historyDao().upsert(entity)
-            val restored = database.historyDao().find(entity.uri)
-            assertEquals(entity.lastPositionMs, restored?.lastPositionMs)
+            dao.insertIfAbsent(entity)
+            val changed = dao.updateProgress(
+                uri = entity.uri,
+                title = entity.title,
+                positionMs = 12_345L,
+                playedAt = 1_700_000_000_100L
+            )
+
+            assertEquals(1, changed)
+            val restored = dao.find(entity.uri)
+            assertEquals(12_345L, restored?.lastPositionMs)
             assertEquals(entity.title, restored?.title)
+            assertTrue((restored?.lastPlayedAt ?: 0L) > entity.lastPlayedAt)
         } finally {
             database.close()
         }
