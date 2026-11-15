@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Slider
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -31,6 +32,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.C
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
@@ -40,7 +42,8 @@ import kotlinx.coroutines.delay
 fun PlayerScreen(
     manager: PlayerSessionManager,
     modifier: Modifier = Modifier,
-    onPickSubtitle: () -> Unit = {}
+    onPickSubtitle: () -> Unit = {},
+    keepScreenOn: Boolean = true
 ) {
     val player = remember(manager) { manager.getOrCreatePlayer() }
     var playing by remember { mutableStateOf(player.isPlaying) }
@@ -52,12 +55,17 @@ fun PlayerScreen(
     var dialog by remember { mutableStateOf("") }
     var trackOptions by remember { mutableStateOf(emptyList<PlayerTrackOption>()) }
     var queueTitles by remember { mutableStateOf(emptyList<String>()) }
+    var playerError by remember { mutableStateOf<String?>(null) }
 
     DisposableEffect(player) {
         val listener = object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) { playing = isPlaying }
             override fun onPlaybackStateChanged(playbackState: Int) {
                 durationMs = player.duration.coerceAtLeast(0L)
+                if (playbackState == Player.STATE_READY) playerError = null
+            }
+            override fun onPlayerError(error: PlaybackException) {
+                playerError = error.message?.take(180) ?: "ไม่สามารถเล่นไฟล์นี้ได้"
             }
             override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
                 if (dialog == "audio") trackOptions = manager.trackOptions(C.TRACK_TYPE_AUDIO)
@@ -90,13 +98,13 @@ fun PlayerScreen(
                         useController = true
                         setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
                         this.resizeMode = resizeMode
-                        keepScreenOn = playing
+                        keepScreenOn = playing && keepScreenOn
                     }
                 },
                 update = { view ->
                     view.player = player
                     view.resizeMode = resizeMode
-                    view.keepScreenOn = playing
+                    view.keepScreenOn = playing && keepScreenOn
                 }
             )
             if (locked) {
@@ -110,6 +118,9 @@ fun PlayerScreen(
             }
         }
 
+        playerError?.let { message ->
+            Text("เกิดข้อผิดพลาด: $message", color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = 12.dp))
+        }
         Slider(
             value = if (durationMs > 0L) positionMs.coerceIn(0L, durationMs).toFloat() else 0f,
             onValueChange = { positionMs = it.toLong() },

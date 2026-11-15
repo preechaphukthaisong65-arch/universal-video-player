@@ -54,7 +54,7 @@ private data class SavedPage(val title: String, val url: String)
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
-fun BrowserScreen(modifier: Modifier = Modifier) {
+fun BrowserScreen(modifier: Modifier = Modifier, enableJavaScript: Boolean = true) {
     val context = LocalContext.current
     val preferences = remember(context) {
         context.getSharedPreferences("browser-local-data", Context.MODE_PRIVATE)
@@ -99,7 +99,7 @@ fun BrowserScreen(modifier: Modifier = Modifier) {
         val value = input.trim()
         if (value.isEmpty()) return
         val destination = runCatching {
-            if (value.any(Char::isWhitespace) ||
+            if (value.any { it.isWhitespace() } ||
                 (!value.contains('.') && !value.contains("://") && !value.contains(':'))
             ) {
                 "https://duckduckgo.com/?q=" +
@@ -229,7 +229,7 @@ fun BrowserScreen(modifier: Modifier = Modifier) {
                 modifier = Modifier.weight(1f).fillMaxWidth(),
                 factory = { viewContext ->
                     val view = webViews[activeTabId] ?: WebView(viewContext).apply {
-                        settings.javaScriptEnabled = true
+                        settings.javaScriptEnabled = enableJavaScript
                         settings.domStorageEnabled = true
                         settings.allowFileAccess = false
                         settings.allowContentAccess = false
@@ -289,6 +289,7 @@ fun BrowserScreen(modifier: Modifier = Modifier) {
                     view
                 },
                 update = { view ->
+                    view.settings.javaScriptEnabled = enableJavaScript
                     if (selectedTab.url.startsWith("https://") && view.url != selectedTab.url) {
                         view.loadUrl(selectedTab.url)
                     }

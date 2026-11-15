@@ -9,6 +9,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.IntentCompat
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
@@ -23,6 +25,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -33,6 +36,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.preechaphukthaisong65.universalvideoplayer.data.PlaybackHistoryEntity
 import com.preechaphukthaisong65.universalvideoplayer.domain.MediaSource
@@ -48,6 +53,7 @@ import kotlinx.coroutines.launch
 class MainActivity : ComponentActivity() {
     private lateinit var playerManager: PlayerSessionManager
     private lateinit var mediaLibraryRepository: MediaLibraryRepository
+    private lateinit var settingsRepository: AppSettingsRepository
     private val libraryItems = MutableStateFlow<List<MediaSource>>(emptyList())
 
     private val openMedia = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
@@ -81,6 +87,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         playerManager = (application as PlayerApplication).playerManager
         mediaLibraryRepository = MediaLibraryRepository(this)
+        settingsRepository = AppSettingsRepository(this)
         handleIncomingIntent(intent)
         getSharedPreferences("media-library", MODE_PRIVATE).getString("selected-tree-uri", null)
             ?.let { saved -> runCatching { Uri.parse(saved) }.getOrNull()?.let(::scanFolder) }
@@ -88,6 +95,8 @@ class MainActivity : ComponentActivity() {
         val app = application as PlayerApplication
         setContent {
             val indexedMedia by libraryItems.collectAsState()
+            var keepScreenAwake by remember { mutableStateOf(settingsRepository.keepScreenAwake()) }
+            var javascriptEnabled by remember { mutableStateOf(settingsRepository.browserJavaScriptEnabled()) }
             UniversalPlayerTheme {
                 var tab by remember { mutableStateOf("เล่น") }
                 Scaffold(
@@ -104,11 +113,12 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 ) { padding ->
+                    Box(Modifier.fillMaxSize().padding(padding), contentAlignment = androidx.compose.ui.Alignment.TopCenter) {
                     Column(
-                        Modifier.fillMaxSize().padding(padding).padding(horizontal = 12.dp, vertical = 8.dp)
+                        Modifier.fillMaxSize().widthIn(max = 900.dp).padding(horizontal = 12.dp, vertical = 8.dp)
                     ) {
                         when (tab) {
-                            "เบราว์เซอร์" -> BrowserScreen(Modifier.weight(1f))
+                            "เบราว์เซอร์" -> BrowserScreen(Modifier.weight(1f), enableJavaScript = javascriptEnabled)
                             "คลัง" -> LibraryScreen(
                                 app = app,
                                 indexedMedia = indexedMedia,
@@ -129,7 +139,7 @@ class MainActivity : ComponentActivity() {
                                 },
                                 modifier = Modifier.weight(1f)
                             )
-                            "ตั้งค่า" -> SettingsScreen(Modifier.weight(1f))
+                            "ตั้งค่า" -> SettingsScreen(keepScreenAwake, { keepScreenAwake = it; settingsRepository.setKeepScreenAwake(it) }, javascriptEnabled, { javascriptEnabled = it; settingsRepository.setBrowserJavaScriptEnabled(it) }, Modifier.weight(1f))
                             else -> {
                                 Row(
                                     Modifier.fillMaxWidth(),
@@ -147,10 +157,12 @@ class MainActivity : ComponentActivity() {
                                         openSubtitle.launch(
                                             arrayOf("application/x-subrip", "text/vtt", "application/octet-stream")
                                         )
-                                    }
+                                    },
+                                    keepScreenOn = keepScreenAwake
                                 )
                             }
                         }
+                    }
                     }
                 }
             }
@@ -283,15 +295,34 @@ private fun LibraryScreen(
 }
 
 @Composable
-private fun SettingsScreen(modifier: Modifier = Modifier) {
+private fun SettingsScreen(
+    keepScreenAwake: Boolean,
+    onKeepScreenAwakeChange: (Boolean) -> Unit,
+    javascriptEnabled: Boolean,
+    onJavascriptEnabledChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
     Column(modifier.fillMaxSize()) {
         Text("ตั้งค่า", style = MaterialTheme.typography.titleLarge)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Column(Modifier.weight(1f)) {
+                Text("ป้องกันหน้าจอดับขณะเล่น")
+                Text("ทำงานเฉพาะระหว่างเล่นสื่อ", style = MaterialTheme.typography.bodySmall)
+            }
+            Switch(checked = keepScreenAwake, onCheckedChange = onKeepScreenAwakeChange, modifier = Modifier.semantics { contentDescription = "ป้องกันหน้าจอดับขณะเล่น" })
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Column(Modifier.weight(1f)) {
+                Text("เปิด JavaScript ใน Browser")
+                Text("บางเว็บไซต์ต้องใช้ JavaScript; ปิดได้เพื่อจำกัดการทำงานของหน้าเว็บ", style = MaterialTheme.typography.bodySmall)
+            }
+            Switch(checked = javascriptEnabled, onCheckedChange = onJavascriptEnabledChange, modifier = Modifier.semantics { contentDescription = "เปิด JavaScript ใน Browser" })
+        }
         Spacer(Modifier.height(12.dp))
-        Text("ความเร็วเล่น: 0.5x – 3.0x")
-        Text("การเล่นใช้ Media3 ExoPlayer")
-        Text("Browser ใช้ Android WebView และ HTTPS เป็นค่าเริ่มต้น")
-        Text("ประวัติและตำแหน่งเล่นเก็บไว้ในอุปกรณ์")
-        Text("ไม่มี VPN ในรุ่นแรก")
+        Text("Playback Engine: Media3 ExoPlayer")
+        Text("ไฟล์และประวัติจัดเก็บในอุปกรณ์")
+        Text("ขนาดตัวอักษรอ้างอิงการตั้งค่าระบบ Android และรองรับ TalkBack")
+        Text("รุ่นแรกไม่มี VPN")
     }
 }
 
