@@ -18,7 +18,7 @@
 - Endpoint IDs are non-secret stable identifiers. Private keys, credentials, and endpoint tokens must never be committed or logged.
 - Measure each endpoint from the device. Do not infer speed from geographic distance.
 - Reject unreachable endpoints, endpoints with >=20% packet loss, and incomplete measurements.
-- Rank usable endpoints by packet loss, then latency, then download throughput.
+- Rank usable endpoints by packet loss, then download throughput, then latency. Retain the active endpoint unless latency or throughput improves by the configured threshold, or packet loss improves by at least 10 percentage points.
 - Switch immediately if current endpoint is unusable. Otherwise switch only for a material improvement (default 20%) to prevent oscillation.
 - If all endpoints fail, stop the tunnel/proxy and show an explicit disconnected state. Never silently fall back to direct access if the user has enabled a privacy lock mode.
 
