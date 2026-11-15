@@ -1,6 +1,8 @@
 name: Signed Android Release
 
 on:
+  push:
+    branches: [feature/release-completion]
   workflow_dispatch:
 
 permissions:
