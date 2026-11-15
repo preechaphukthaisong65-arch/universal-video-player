@@ -48,7 +48,7 @@ jobs:
           test -n "$ANDROID_KEY_PASSWORD"
 
           KEYSTORE="$RUNNER_TEMP/release-validation.p12"
-          printf '%s' "$ANDROID_KEYSTORE_BASE64" | tr -d '\r\n ' | base64 --decode > "$KEYSTORE"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --ignore-garbage --decode > "$KEYSTORE"
           test -s "$KEYSTORE"
 
           CERT_OUTPUT="$(keytool -list -v -keystore "$KEYSTORE" -storetype PKCS12 -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS")"
