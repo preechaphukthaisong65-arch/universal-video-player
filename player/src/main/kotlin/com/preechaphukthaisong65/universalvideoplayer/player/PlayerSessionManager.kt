@@ -3,12 +3,12 @@ package com.preechaphukthaisong65.universalvideoplayer.player
 import android.content.Context
 import android.net.Uri
 import androidx.media3.common.C
+import androidx.media3.common.AudioAttributes
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
-import androidx.media3.common.Tracks
 import androidx.media3.common.MimeTypes
 import androidx.media3.exoplayer.ExoPlayer
 import com.preechaphukthaisong65.universalvideoplayer.domain.MediaSource
@@ -31,7 +31,11 @@ class PlayerSessionManager(context: Context) : PlaybackPort {
 
     @Synchronized
     fun getOrCreatePlayer(): ExoPlayer =
-        player ?: ExoPlayer.Builder(appContext).build().also { player = it }
+        player ?: ExoPlayer.Builder(appContext)
+            .setAudioAttributes(AudioAttributes.DEFAULT, true)
+            .setHandleAudioBecomingNoisy(true)
+            .build()
+            .also { player = it }
 
     override fun play(source: MediaSource) = playQueue(listOf(source))
 
