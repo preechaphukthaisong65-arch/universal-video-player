@@ -21,8 +21,8 @@ import com.preechaphukthaisong65.universalvideoplayer.theme.UniversalPlayerTheme
 class MainActivity : ComponentActivity() {
     private lateinit var playerManager: PlayerSessionManager
 
-    private val openMedia = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
-        uri?.let { startPlayback(it) }
+    private val openMedia = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris: List<Uri> ->
+        if (uris.isNotEmpty()) startPlayback(uris)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -83,26 +83,29 @@ class MainActivity : ComponentActivity() {
     private fun handleIncomingIntent(incoming: Intent?) {
         if (incoming == null) return
         when (incoming.action) {
-            Intent.ACTION_VIEW -> incoming.data?.let(::startPlayback)
+            Intent.ACTION_VIEW -> incoming.data?.let { startPlayback(listOf(it)) }
             Intent.ACTION_SEND -> {
                 val uri = IntentCompat.getParcelableExtra(incoming, Intent.EXTRA_STREAM, Uri::class.java)
-                uri?.let(::startPlayback)
+                uri?.let { startPlayback(listOf(it)) }
             }
             Intent.ACTION_SEND_MULTIPLE -> {
                 IntentCompat.getParcelableArrayListExtra(incoming, Intent.EXTRA_STREAM, Uri::class.java)
-                    ?.firstOrNull()
+                    ?.takeIf { it.isNotEmpty() }
                     ?.let(::startPlayback)
             }
         }
     }
 
-    private fun startPlayback(uri: Uri) {
-        runCatching {
-            contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    private fun startPlayback(uris: List<Uri>) {
+        val sources = uris.distinct().map { uri ->
+            runCatching {
+                contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            MediaSource(uri.toString(), title = uri.lastPathSegment)
         }
-        val source = MediaSource(uri.toString(), title = uri.lastPathSegment)
-        playerManager.play(source)
-        (application as PlayerApplication).recordPlayback(source)
+        if (sources.isEmpty()) return
+        playerManager.playQueue(sources)
+        sources.forEach { (application as PlayerApplication).recordPlayback(it) }
     }
 
     override fun onStop() {
