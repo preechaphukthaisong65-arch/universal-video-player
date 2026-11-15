@@ -17,7 +17,7 @@ kotlin { jvmToolchain(17) }
 dependencies {
     implementation(project(":domain"))
     implementation("androidx.core:core-ktx:1.15.0")
-    implementation("androidx.media3:media3-exoplayer:1.5.1")
+    api("androidx.media3:media3-exoplayer:1.5.1")
     implementation("androidx.media3:media3-ui:1.5.1")
     implementation("androidx.compose.ui:ui:1.7.6")
     implementation("androidx.compose.foundation:foundation:1.7.6")
