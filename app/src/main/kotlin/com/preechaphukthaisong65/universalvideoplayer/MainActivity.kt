@@ -30,6 +30,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -39,15 +40,32 @@ import com.preechaphukthaisong65.universalvideoplayer.player.PlayerScreen
 import com.preechaphukthaisong65.universalvideoplayer.player.PlayerSessionManager
 import com.preechaphukthaisong65.universalvideoplayer.browser.BrowserScreen
 import com.preechaphukthaisong65.universalvideoplayer.theme.UniversalPlayerTheme
-import kotlinx.coroutines.CoroutineScope
+import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private lateinit var playerManager: PlayerSessionManager
+    private lateinit var mediaLibraryRepository: MediaLibraryRepository
+    private val libraryItems = MutableStateFlow<List<MediaSource>>(emptyList())
 
     private val openMedia = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isNotEmpty()) startPlayback(uris)
+    }
+
+    private val openFolder = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        uri?.let { selected ->
+            runCatching {
+                contentResolver.takePersistableUriPermission(
+                    selected,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            }
+            getSharedPreferences("media-library", MODE_PRIVATE).edit()
+                .putString("selected-tree-uri", selected.toString()).apply()
+            scanFolder(selected)
+        }
     }
 
     private val openSubtitle = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -62,10 +80,14 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         playerManager = (application as PlayerApplication).playerManager
+        mediaLibraryRepository = MediaLibraryRepository(this)
         handleIncomingIntent(intent)
+        getSharedPreferences("media-library", MODE_PRIVATE).getString("selected-tree-uri", null)
+            ?.let { saved -> runCatching { Uri.parse(saved) }.getOrNull()?.let(::scanFolder) }
 
         val app = application as PlayerApplication
         setContent {
+            val indexedMedia by libraryItems.collectAsState()
             UniversalPlayerTheme {
                 var tab by remember { mutableStateOf("เล่น") }
                 Scaffold(
@@ -89,7 +111,14 @@ class MainActivity : ComponentActivity() {
                             "เบราว์เซอร์" -> BrowserScreen(Modifier.weight(1f))
                             "คลัง" -> LibraryScreen(
                                 app = app,
+                                indexedMedia = indexedMedia,
                                 onPickFiles = { openMedia.launch(arrayOf("video/*", "audio/*")) },
+                                onPickFolder = { openFolder.launch(null) },
+                                onPlaySource = { source ->
+                                    playerManager.play(source)
+                                    app.recordPlayback(source)
+                                    tab = "เล่น"
+                                },
                                 onPlay = { item ->
                                     playerManager.playQueue(
                                         listOf(MediaSource(item.uri, item.title)),
@@ -150,6 +179,13 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun scanFolder(uri: Uri) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            libraryItems.value = runCatching { mediaLibraryRepository.scanFolder(uri) }
+                .getOrDefault(emptyList())
+        }
+    }
+
     private fun startPlayback(uris: List<Uri>) {
         val sources = uris.distinct().map { uri ->
             runCatching {
@@ -180,7 +216,10 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun LibraryScreen(
     app: PlayerApplication,
+    indexedMedia: List<MediaSource>,
     onPickFiles: () -> Unit,
+    onPickFolder: () -> Unit,
+    onPlaySource: (MediaSource) -> Unit,
     onPlay: (PlaybackHistoryEntity) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -190,6 +229,13 @@ private fun LibraryScreen(
         if (query.isBlank()) history
         else history.filter {
             it.title.contains(query, ignoreCase = true) || it.uri.contains(query, ignoreCase = true)
+        }
+    }
+    val filteredLibrary = remember(indexedMedia, query) {
+        if (query.isBlank()) indexedMedia
+        else indexedMedia.filter {
+            it.title.orEmpty().contains(query, ignoreCase = true) ||
+                it.uri.contains(query, ignoreCase = true)
         }
     }
 
@@ -203,25 +249,33 @@ private fun LibraryScreen(
             label = { Text("ค้นหาชื่อไฟล์หรือที่อยู่ไฟล์") }
         )
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = onPickFiles) { Text("เลือกไฟล์จากเครื่อง") }
+            Button(onClick = onPickFiles) { Text("เลือกไฟล์") }
+            TextButton(onClick = onPickFolder) { Text("เลือกโฟลเดอร์") }
+            val scope = rememberCoroutineScope()
             TextButton(
                 onClick = {
-                    CoroutineScope(Dispatchers.IO).launch { app.database.historyDao().clear() }
+                    scope.launch(Dispatchers.IO) { app.database.historyDao().clear() }
                 }
             ) { Text("ล้างประวัติ") }
         }
-        if (filtered.isEmpty()) {
-            Text("ยังไม่มีประวัติการเล่น")
-        } else {
-            LazyColumn {
-                items(filtered, key = { it.uri }) { item ->
-                    Column(
-                        Modifier.fillMaxWidth().clickable { onPlay(item) }.padding(vertical = 10.dp)
-                    ) {
-                        Text(item.title, style = MaterialTheme.typography.titleMedium)
-                        Text("ตำแหน่งล่าสุด: ${formatPosition(item.lastPositionMs)}")
-                        Text(item.uri, style = MaterialTheme.typography.bodySmall, maxLines = 1)
-                    }
+        Text("ไฟล์ในโฟลเดอร์ที่เลือก (${filteredLibrary.size})", style = MaterialTheme.typography.titleMedium)
+        LazyColumn(modifier = Modifier.weight(1f)) {
+            items(filteredLibrary, key = { "file:" + it.uri }) { source ->
+                Column(
+                    Modifier.fillMaxWidth().clickable { onPlaySource(source) }.padding(vertical = 10.dp)
+                ) {
+                    Text(source.title ?: "ไฟล์สื่อ", style = MaterialTheme.typography.titleMedium)
+                    Text(source.mimeType ?: "ชนิดไฟล์ไม่ระบุ", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+            item { Text("ประวัติการเล่น (${filtered.size})", style = MaterialTheme.typography.titleMedium) }
+            items(filtered, key = { "history:" + it.uri }) { item ->
+                Column(
+                    Modifier.fillMaxWidth().clickable { onPlay(item) }.padding(vertical = 10.dp)
+                ) {
+                    Text(item.title, style = MaterialTheme.typography.titleMedium)
+                    Text("ตำแหน่งล่าสุด: ${formatPosition(item.lastPositionMs)}")
+                    Text(item.uri, style = MaterialTheme.typography.bodySmall, maxLines = 1)
                 }
             }
         }
