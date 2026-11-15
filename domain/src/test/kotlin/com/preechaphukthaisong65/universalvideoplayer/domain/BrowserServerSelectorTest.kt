@@ -26,6 +26,13 @@ class BrowserServerSelectorTest {
         assertEquals("b", selected)
     }
 
+    @Test fun prefersHigherThroughputWhenPacketLossIsEqual() {
+        val selected = BrowserServerSelector.select(
+            listOf(server("low-latency", 40, 1_000), server("fast", 120, 5_000))
+        )
+        assertEquals("fast", selected)
+    }
+
     @Test fun immediatelyFailsOverWhenCurrentServerIsUnreachable() {
         val selected = BrowserServerSelector.select(
             listOf(server("a", 100, 3_000, reachable = false), server("b", 140, 2_500)),
