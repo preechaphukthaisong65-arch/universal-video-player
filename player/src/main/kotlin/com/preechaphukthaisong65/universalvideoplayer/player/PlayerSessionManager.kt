@@ -7,6 +7,7 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import com.preechaphukthaisong65.universalvideoplayer.domain.MediaSource
 import com.preechaphukthaisong65.universalvideoplayer.domain.PlaybackPort
+import com.preechaphukthaisong65.universalvideoplayer.domain.PlaybackSpeedPolicy
 import com.preechaphukthaisong65.universalvideoplayer.domain.PlaybackSnapshot
 
 /**
@@ -37,7 +38,7 @@ class PlayerSessionManager(context: Context) : PlaybackPort {
     override fun seekTo(positionMs: Long) { player?.seekTo(positionMs.coerceAtLeast(0L)) }
 
     override fun setSpeed(speed: Float) {
-        require(speed in 0.25f..3.0f) { "Playback speed must be between 0.25x and 3.0x" }
+        require(PlaybackSpeedPolicy.isAllowed(speed)) { "Playback speed must be between 0.25x and 3.0x" }
         player?.setPlaybackParameters(PlaybackParameters(speed))
     }
 
