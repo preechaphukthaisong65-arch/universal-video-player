@@ -17,6 +17,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     env:
       ANDROID_HOME: /usr/local/lib/android/sdk
     steps:
@@ -27,6 +28,7 @@ jobs:
           java-version: "17"
       - name: Install Android SDK components
         run: |
+          set -euo pipefail
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           yes | "$SDKMANAGER" --licenses >/dev/null
           "$SDKMANAGER" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
@@ -46,8 +48,13 @@ jobs:
           profile: pixel_2
           disable-animations: true
           script: gradle --no-daemon connectedDebugAndroidTest
-      - uses: actions/upload-artifact@v4
+      - name: Upload debug APK and instrumentation test reports
+        uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: universal-video-player-debug
-          path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
+          name: universal-video-player-debug-and-test-reports
+          path: |
+            app/build/outputs/apk/debug/*.apk
+            app/build/reports/androidTests/connected/**
+            app/build/outputs/androidTest-results/connected/**
+          if-no-files-found: warn
