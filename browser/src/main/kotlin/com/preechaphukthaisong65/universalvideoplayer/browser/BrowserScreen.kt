@@ -2,6 +2,8 @@ package com.preechaphukthaisong65.universalvideoplayer.browser
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.net.Uri
+import android.view.View
 import android.view.ViewGroup
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
@@ -54,12 +56,18 @@ private data class SavedPage(val title: String, val url: String)
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
-fun BrowserScreen(modifier: Modifier = Modifier, enableJavaScript: Boolean = true) {
+fun BrowserScreen(
+    modifier: Modifier = Modifier,
+    enableJavaScript: Boolean = true,
+    onOpenMedia: (String, String?) -> Unit = { _, _ -> }
+) {
     val context = LocalContext.current
     val preferences = remember(context) {
         context.getSharedPreferences("browser-local-data", Context.MODE_PRIVATE)
     }
     val keyboard = LocalSoftwareKeyboardController.current
+    val downloadHandler = remember(context) { BrowserDownloadHandler(context) }
+    val fullscreenController = remember(context) { BrowserFullscreenController(context) }
     val tabs = remember { mutableStateListOf(BrowserTabState(1, "about:blank", "แท็บ 1")) }
     val webViews = remember { mutableStateMapOf<Int, WebView>() }
     val bookmarks = remember {
@@ -81,6 +89,7 @@ fun BrowserScreen(modifier: Modifier = Modifier, enableJavaScript: Boolean = tru
     var canGoForward by remember { mutableStateOf(false) }
     var dialog by remember { mutableStateOf("") }
     var privacyMessage by remember { mutableStateOf("") }
+    var downloadMessage by remember { mutableStateOf("") }
 
     fun updateTab(id: Int, transform: (BrowserTabState) -> BrowserTabState) {
         val index = tabs.indexOfFirst { it.id == id }
@@ -118,6 +127,7 @@ fun BrowserScreen(modifier: Modifier = Modifier, enableJavaScript: Boolean = tru
     }
 
     LaunchedEffect(activeTabId) {
+        fullscreenController.hide()
         val active = tabs.firstOrNull { it.id == activeTabId }
         address = active?.url?.takeUnless { it == "about:blank" }.orEmpty()
         pageTitle = active?.title ?: "แท็บใหม่"
@@ -129,6 +139,7 @@ fun BrowserScreen(modifier: Modifier = Modifier, enableJavaScript: Boolean = tru
 
     DisposableEffect(Unit) {
         onDispose {
+            fullscreenController.hide()
             webViews.values.toList().forEach { view ->
                 (view.parent as? ViewGroup)?.removeView(view)
                 view.stopLoading()
@@ -239,10 +250,29 @@ fun BrowserScreen(modifier: Modifier = Modifier, enableJavaScript: Boolean = tru
                         settings.safeBrowsingEnabled = true
                         settings.setSupportMultipleWindows(false)
                         CookieManager.getInstance().setAcceptThirdPartyCookies(this, false)
+                        setDownloadListener { url, userAgent, contentDisposition, mimeType, _ ->
+                            val downloadId = downloadHandler.enqueue(
+                                url,
+                                userAgent,
+                                contentDisposition,
+                                mimeType
+                            )
+                            downloadMessage = if (downloadId != null) {
+                                "ส่งคำขอดาวน์โหลดไปยัง Download Manager แล้ว"
+                            } else {
+                                "ดาวน์โหลดไม่ได้: รองรับเฉพาะลิงก์ HTTPS ที่ไม่ต้องส่ง Cookie จาก Browser"
+                            }
+                        }
                         webViewClient = object : WebViewClient() {
                             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
-                                return !request.url.scheme.equals("https", ignoreCase = true) ||
+                                if (!request.url.scheme.equals("https", ignoreCase = true) ||
                                     !request.url.userInfo.isNullOrEmpty()
+                                ) return true
+                                if (request.isForMainFrame && isDirectMediaUrl(request.url)) {
+                                    onOpenMedia(request.url.toString(), request.url.lastPathSegment)
+                                    return true
+                                }
+                                return false
                             }
 
                             override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
@@ -280,6 +310,14 @@ fun BrowserScreen(modifier: Modifier = Modifier, enableJavaScript: Boolean = tru
                         webChromeClient = object : WebChromeClient() {
                             override fun onProgressChanged(view: WebView, newProgress: Int) {
                                 if (activeTabId == selectedTab.id) progress = newProgress
+                            }
+
+                            override fun onShowCustomView(view: View, callback: CustomViewCallback) {
+                                fullscreenController.show(view, callback)
+                            }
+
+                            override fun onHideCustomView() {
+                                fullscreenController.hide()
                             }
                         }
                         loadUrl("about:blank")
@@ -350,6 +388,14 @@ fun BrowserScreen(modifier: Modifier = Modifier, enableJavaScript: Boolean = tru
         )
     }
 
+    if (downloadMessage.isNotBlank()) {
+        AlertDialog(
+            onDismissRequest = { downloadMessage = "" },
+            text = { Text(downloadMessage) },
+            confirmButton = { TextButton(onClick = { downloadMessage = "" }) { Text("ตกลง") } }
+        )
+    }
+
     if (privacyMessage.isNotBlank()) {
         AlertDialog(
             onDismissRequest = { privacyMessage = "" },
@@ -358,6 +404,16 @@ fun BrowserScreen(modifier: Modifier = Modifier, enableJavaScript: Boolean = tru
         )
     }
 }
+
+private fun isDirectMediaUrl(uri: Uri): Boolean {
+    val path = uri.path.orEmpty().lowercase()
+    return DIRECT_MEDIA_EXTENSIONS.any { path.endsWith(".$it") }
+}
+
+private val DIRECT_MEDIA_EXTENSIONS = setOf(
+    "mp4", "m4v", "mkv", "webm", "mov", "avi", "3gp", "ts",
+    "mp3", "m4a", "aac", "flac", "ogg", "opus", "wav"
+)
 
 private fun safeStoredUrl(value: String): String? = runCatching {
     val parsed = URI(value)
