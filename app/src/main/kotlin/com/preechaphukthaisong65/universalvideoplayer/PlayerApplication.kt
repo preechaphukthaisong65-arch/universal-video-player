@@ -48,6 +48,20 @@ class PlayerApplication : Application() {
         }
     }
 
+    fun recordPlaybackProgress(source: MediaSource, positionMs: Long) {
+        applicationScope.launch {
+            val previous = database.historyDao().find(source.uri)
+            database.historyDao().upsert(
+                PlaybackHistoryEntity(
+                    uri = source.uri,
+                    title = source.title?.take(250) ?: previous?.title ?: "Untitled media",
+                    lastPositionMs = positionMs.coerceAtLeast(0L),
+                    lastPlayedAt = System.currentTimeMillis()
+                )
+            )
+        }
+    }
+
     private suspend fun persistCurrentProgress() {
         val source = playerManager.currentMediaSource() ?: return
         val snapshot = playerManager.snapshot()
