@@ -36,8 +36,17 @@ interface PlaybackHistoryDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(item: PlaybackHistoryEntity)
 
-    @Query("UPDATE playback_history SET lastPositionMs = :positionMs, lastPlayedAt = :playedAt WHERE uri = :uri")
-    suspend fun updateProgress(uri: String, positionMs: Long, playedAt: Long)
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertIfAbsent(item: PlaybackHistoryEntity)
+
+    @Query("UPDATE playback_history SET title = :title, lastPlayedAt = :playedAt WHERE uri = :uri")
+    suspend fun touch(uri: String, title: String, playedAt: Long)
+
+    @Query(
+        "UPDATE playback_history SET title = :title, lastPositionMs = :positionMs, lastPlayedAt = :playedAt " +
+            "WHERE uri = :uri"
+    )
+    suspend fun updateProgress(uri: String, title: String, positionMs: Long, playedAt: Long): Int
 
     @Query("DELETE FROM playback_history WHERE uri = :uri")
     suspend fun delete(uri: String)
