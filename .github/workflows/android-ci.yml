@@ -37,6 +37,15 @@ jobs:
         run: gradle --no-daemon :domain:test :app:lintDebug
       - name: Build debug APK
         run: gradle --no-daemon :app:assembleDebug
+      - name: Run Android instrumentation tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          script: gradle --no-daemon connectedDebugAndroidTest
       - uses: actions/upload-artifact@v4
         with:
           name: universal-video-player-debug

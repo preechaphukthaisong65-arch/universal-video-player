@@ -118,7 +118,16 @@ class MainActivity : ComponentActivity() {
                         Modifier.fillMaxSize().widthIn(max = 900.dp).padding(horizontal = 12.dp, vertical = 8.dp)
                     ) {
                         when (tab) {
-                            "เบราว์เซอร์" -> BrowserScreen(Modifier.weight(1f), enableJavaScript = javascriptEnabled)
+                            "เบราว์เซอร์" -> BrowserScreen(
+                                modifier = Modifier.weight(1f),
+                                enableJavaScript = javascriptEnabled,
+                                onOpenMedia = { uri, title ->
+                                    val source = MediaSource(uri, title)
+                                    playerManager.play(source)
+                                    app.recordPlayback(source)
+                                    tab = "เล่น"
+                                }
+                            )
                             "คลัง" -> LibraryScreen(
                                 app = app,
                                 indexedMedia = indexedMedia,

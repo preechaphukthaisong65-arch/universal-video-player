@@ -2,6 +2,8 @@ package com.preechaphukthaisong65.universalvideoplayer.player
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,6 +31,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.C
@@ -37,6 +41,7 @@ import androidx.media3.common.Player
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.delay
+import kotlin.math.abs
 
 @Composable
 fun PlayerScreen(
@@ -56,6 +61,7 @@ fun PlayerScreen(
     var trackOptions by remember { mutableStateOf(emptyList<PlayerTrackOption>()) }
     var queueTitles by remember { mutableStateOf(emptyList<String>()) }
     var playerError by remember { mutableStateOf<String?>(null) }
+    var isSeeking by remember { mutableStateOf(false) }
 
     DisposableEffect(player) {
         val listener = object : Player.Listener {
@@ -78,7 +84,7 @@ fun PlayerScreen(
 
     LaunchedEffect(player) {
         while (true) {
-            positionMs = player.currentPosition.coerceAtLeast(0L)
+            if (!isSeeking) positionMs = player.currentPosition.coerceAtLeast(0L)
             durationMs = player.duration.coerceAtLeast(0L)
             speed = player.playbackParameters.speed
             delay(500)
@@ -87,7 +93,24 @@ fun PlayerScreen(
 
     Column(modifier.fillMaxSize()) {
         Box(
-            Modifier.fillMaxWidth().aspectRatio(16f / 9f),
+            Modifier.fillMaxWidth().aspectRatio(16f / 9f).pointerInput(player) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    var deltaX = 0f
+                    var deltaY = 0f
+                    do {
+                        val event = awaitPointerEvent(PointerEventPass.Final)
+                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                        deltaX = change.position.x - down.position.x
+                        deltaY = change.position.y - down.position.y
+                    } while (change.pressed)
+                    if (!locked && abs(deltaX) > 72f && abs(deltaX) > abs(deltaY) * 1.5f) {
+                        val seekDelta = (deltaX / size.width.coerceAtLeast(1) * 120_000f)
+                            .toLong().coerceIn(-60_000L, 60_000L)
+                        manager.seekBy(seekDelta)
+                    }
+                }
+            },
             contentAlignment = Alignment.Center
         ) {
             AndroidView(
@@ -123,8 +146,8 @@ fun PlayerScreen(
         }
         Slider(
             value = if (durationMs > 0L) positionMs.coerceIn(0L, durationMs).toFloat() else 0f,
-            onValueChange = { positionMs = it.toLong() },
-            onValueChangeFinished = { manager.seekTo(positionMs) },
+            onValueChange = { isSeeking = true; positionMs = it.toLong() },
+            onValueChangeFinished = { manager.seekTo(positionMs); isSeeking = false },
             valueRange = 0f..(durationMs.coerceAtLeast(1L).toFloat()),
             enabled = durationMs > 0L && !locked,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)
@@ -160,7 +183,7 @@ fun PlayerScreen(
                     AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> AspectRatioFrameLayout.RESIZE_MODE_FILL
                     else -> AspectRatioFrameLayout.RESIZE_MODE_FIT
                 }
-            }) {
+            }, enabled = !locked) {
                 Text(
                     when (resizeMode) {
                         AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> "ซูม"
@@ -200,7 +223,7 @@ fun PlayerScreen(
             TextButton(onClick = {
                 queueTitles = manager.queueTitles()
                 dialog = "queue"
-            }) { Text("คิว") }
+            }, enabled = !locked) { Text("คิว") }
         }
     }
 

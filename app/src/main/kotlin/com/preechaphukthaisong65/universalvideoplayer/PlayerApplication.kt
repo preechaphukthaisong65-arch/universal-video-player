@@ -1,6 +1,7 @@
 package com.preechaphukthaisong65.universalvideoplayer
 
 import android.app.Application
+import android.net.Uri
 import androidx.room.Room
 import com.preechaphukthaisong65.universalvideoplayer.data.PlaybackHistoryEntity
 import com.preechaphukthaisong65.universalvideoplayer.data.PlayerDatabase
@@ -35,6 +36,7 @@ class PlayerApplication : Application() {
     }
 
     fun recordPlayback(source: MediaSource) {
+        if (!isPersistableLocalUri(source.uri)) return
         applicationScope.launch {
             val previous = database.historyDao().find(source.uri)
             database.historyDao().upsert(
@@ -49,6 +51,7 @@ class PlayerApplication : Application() {
     }
 
     fun recordPlaybackProgress(source: MediaSource, positionMs: Long) {
+        if (!isPersistableLocalUri(source.uri)) return
         applicationScope.launch {
             val previous = database.historyDao().find(source.uri)
             database.historyDao().upsert(
@@ -64,6 +67,7 @@ class PlayerApplication : Application() {
 
     private suspend fun persistCurrentProgress() {
         val source = playerManager.currentMediaSource() ?: return
+        if (!isPersistableLocalUri(source.uri)) return
         val snapshot = playerManager.snapshot()
         val now = System.currentTimeMillis()
         val existing = database.historyDao().find(source.uri)
@@ -76,6 +80,9 @@ class PlayerApplication : Application() {
             )
         )
     }
+
+    private fun isPersistableLocalUri(value: String): Boolean =
+        Uri.parse(value).scheme?.lowercase() in setOf("content", "file")
 
     companion object {
         private const val PROGRESS_SAVE_INTERVAL_MS = 5_000L
