@@ -48,8 +48,8 @@ object BrowserServerSelector {
 
         val ranked = usable.sortedWith(
             compareBy<BrowserServerHealth> { it.packetLossPercent }
-                .thenBy { it.latencyMs }
                 .thenByDescending { it.downloadKbps }
+                .thenBy { it.latencyMs }
         )
         val best = ranked.first()
         val current = usable.firstOrNull { it.serverId == currentServerId }
