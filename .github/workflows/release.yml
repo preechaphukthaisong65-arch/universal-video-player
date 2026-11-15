@@ -44,17 +44,18 @@ jobs:
           set -euo pipefail
           test -n "$ANDROID_KEYSTORE_BASE64"
           test -n "$ANDROID_KEYSTORE_PASSWORD"
-          test -n "$ANDROID_KEY_ALIAS"
+          NORMALIZED_KEY_ALIAS="$(printf '%s' "$ANDROID_KEY_ALIAS" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+          test -n "$NORMALIZED_KEY_ALIAS"
           test -n "$ANDROID_KEY_PASSWORD"
 
           KEYSTORE="$RUNNER_TEMP/release-validation.p12"
-          BASE64_CLEAN="$(printf '%s' "$ANDROID_KEYSTORE_BASE64" | tr -cd 'A-Za-z0-9+/=')"
+          BASE64_CLEAN="$(printf '%s' "$ANDROID_KEYSTORE_BASE64" | tr -d '[:space:]')"
           echo "Sanitized keystore Base64 length: ${#BASE64_CLEAN}"
           test -n "$BASE64_CLEAN"
           printf '%s' "$BASE64_CLEAN" | base64 --decode > "$KEYSTORE"
           test -s "$KEYSTORE"
 
-          if ! CERT_OUTPUT="$(keytool -list -v -keystore "$KEYSTORE" -storetype PKCS12 -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" 2>&1)"; then
+          if ! CERT_OUTPUT="$(keytool -list -v -keystore "$KEYSTORE" -storetype PKCS12 -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$NORMALIZED_KEY_ALIAS" 2>&1)"; then
             echo "Keystore could not be opened. Check the Base64 secret, store password, and alias in GitHub Actions Secrets."
             printf '%s\n' "$CERT_OUTPUT" | sed -E 's/.*([Pp]assword).*/[password diagnostic redacted]/'
             exit 1
