@@ -11,27 +11,23 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.lifecycleScope
 import com.preechaphukthaisong65.universalvideoplayer.browser.BrowserScreen
 import com.preechaphukthaisong65.universalvideoplayer.domain.MediaSource
 import com.preechaphukthaisong65.universalvideoplayer.player.PlayerSessionManager
 import com.preechaphukthaisong65.universalvideoplayer.player.PlayerSurface
 import com.preechaphukthaisong65.universalvideoplayer.theme.UniversalPlayerTheme
-import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private lateinit var playerManager: PlayerSessionManager
+
     private val openMedia = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
-        uri?.let {
-            runCatching { contentResolver.takePersistableUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
-            playerManager.play(MediaSource(uri.toString(), title = it.lastPathSegment))
-        }
+        uri?.let { startPlayback(it) }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         playerManager = (application as PlayerApplication).playerManager
-        intent?.data?.let { playerManager.play(MediaSource(it.toString(), it.lastPathSegment)) }
+        handleIncomingIntent(intent)
         setContent {
             UniversalPlayerTheme {
                 var tab by remember { mutableStateOf("หน้าแรก") }
@@ -75,6 +71,37 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIncomingIntent(intent)
+    }
+
+    private fun handleIncomingIntent(incoming: Intent?) {
+        if (incoming == null) return
+        when (incoming.action) {
+            Intent.ACTION_VIEW -> incoming.data?.let(::startPlayback)
+            Intent.ACTION_SEND -> {
+                val uri = incoming.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+                uri?.let(::startPlayback)
+            }
+            Intent.ACTION_SEND_MULTIPLE -> {
+                incoming.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM)
+                    ?.firstOrNull()
+                    ?.let(::startPlayback)
+            }
+        }
+    }
+
+    private fun startPlayback(uri: Uri) {
+        runCatching {
+            contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        val source = MediaSource(uri.toString(), title = uri.lastPathSegment)
+        playerManager.play(source)
+        (application as PlayerApplication).recordPlayback(source)
     }
 
     override fun onStop() {
