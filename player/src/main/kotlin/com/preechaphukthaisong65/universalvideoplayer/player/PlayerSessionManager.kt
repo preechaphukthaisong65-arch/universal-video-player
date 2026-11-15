@@ -21,13 +21,21 @@ class PlayerSessionManager(context: Context) : PlaybackPort {
     @Synchronized
     fun getOrCreatePlayer(): ExoPlayer = player ?: ExoPlayer.Builder(appContext).build().also { player = it }
 
-    override fun play(source: MediaSource) {
-        val item = MediaItem.Builder().setUri(source.uri).apply {
-            source.mimeType?.let(::setMimeType)
-            source.title?.let { setMediaMetadata(androidx.media3.common.MediaMetadata.Builder().setTitle(it).build()) }
-        }.build()
+    override fun play(source: MediaSource) = playQueue(listOf(source))
+
+    /** Replaces the active queue atomically while retaining the single shared player instance. */
+    fun playQueue(sources: List<MediaSource>) {
+        require(sources.isNotEmpty()) { "Playback queue must not be empty" }
+        val items = sources.map { source ->
+            MediaItem.Builder().setUri(source.uri).apply {
+                source.mimeType?.let(::setMimeType)
+                source.title?.let {
+                    setMediaMetadata(androidx.media3.common.MediaMetadata.Builder().setTitle(it).build())
+                }
+            }.build()
+        }
         getOrCreatePlayer().apply {
-            setMediaItem(item)
+            setMediaItems(items, 0, 0L)
             prepare()
             playWhenReady = true
         }
