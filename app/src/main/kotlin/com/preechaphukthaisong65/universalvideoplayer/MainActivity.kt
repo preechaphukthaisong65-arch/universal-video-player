@@ -165,7 +165,7 @@ class MainActivity : ComponentActivity() {
     override fun onStop() {
         (application as? PlayerApplication)?.let { app ->
             val current = playerManager.currentMediaSource()
-            if (current != null) app.recordPlayback(current)
+            if (current != null) app.recordPlaybackProgress(current, playerManager.snapshot().positionMs)
         }
         playerManager.pause()
         super.onStop()
