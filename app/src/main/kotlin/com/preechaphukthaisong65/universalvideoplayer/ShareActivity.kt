@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import androidx.core.content.IntentCompat
 
 class ShareActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -15,11 +16,11 @@ class ShareActivity : Activity() {
             when (incoming.action) {
                 Intent.ACTION_VIEW -> data = incoming.data
                 Intent.ACTION_SEND -> {
-                    val stream = incoming.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+                    val stream = IntentCompat.getParcelableExtra(incoming, Intent.EXTRA_STREAM, Uri::class.java)
                     putExtra(Intent.EXTRA_STREAM, stream)
                 }
                 Intent.ACTION_SEND_MULTIPLE -> {
-                    val streams = incoming.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM)
+                    val streams = IntentCompat.getParcelableArrayListExtra(incoming, Intent.EXTRA_STREAM, Uri::class.java)
                     putParcelableArrayListExtra(Intent.EXTRA_STREAM, streams)
                 }
             }
