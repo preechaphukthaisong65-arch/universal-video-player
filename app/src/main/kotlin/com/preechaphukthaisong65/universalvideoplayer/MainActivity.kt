@@ -6,6 +6,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.IntentCompat
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -84,11 +85,11 @@ class MainActivity : ComponentActivity() {
         when (incoming.action) {
             Intent.ACTION_VIEW -> incoming.data?.let(::startPlayback)
             Intent.ACTION_SEND -> {
-                val uri = incoming.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+                val uri = IntentCompat.getParcelableExtra(incoming, Intent.EXTRA_STREAM, Uri::class.java)
                 uri?.let(::startPlayback)
             }
             Intent.ACTION_SEND_MULTIPLE -> {
-                incoming.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM)
+                IntentCompat.getParcelableArrayListExtra(incoming, Intent.EXTRA_STREAM, Uri::class.java)
                     ?.firstOrNull()
                     ?.let(::startPlayback)
             }
