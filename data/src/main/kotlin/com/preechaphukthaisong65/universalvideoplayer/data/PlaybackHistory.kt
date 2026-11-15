@@ -23,8 +23,21 @@ interface PlaybackHistoryDao {
     @Query("SELECT * FROM playback_history ORDER BY lastPlayedAt DESC")
     fun observeAll(): Flow<List<PlaybackHistoryEntity>>
 
+    @Query("SELECT * FROM playback_history WHERE uri = :uri LIMIT 1")
+    suspend fun find(uri: String): PlaybackHistoryEntity?
+
+    @Query(
+        "SELECT * FROM playback_history " +
+            "WHERE title LIKE '%' || :query || '%' OR uri LIKE '%' || :query || '%' " +
+            "ORDER BY lastPlayedAt DESC"
+    )
+    fun search(query: String): Flow<List<PlaybackHistoryEntity>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(item: PlaybackHistoryEntity)
+
+    @Query("UPDATE playback_history SET lastPositionMs = :positionMs, lastPlayedAt = :playedAt WHERE uri = :uri")
+    suspend fun updateProgress(uri: String, positionMs: Long, playedAt: Long)
 
     @Query("DELETE FROM playback_history WHERE uri = :uri")
     suspend fun delete(uri: String)

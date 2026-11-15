@@ -3,7 +3,9 @@ package com.preechaphukthaisong65.universalvideoplayer.domain
 data class MediaSource(
     val uri: String,
     val title: String? = null,
-    val mimeType: String? = null
+    val mimeType: String? = null,
+    val subtitleUri: String? = null,
+    val subtitleMimeType: String? = null
 )
 
 data class PlaybackSnapshot(
