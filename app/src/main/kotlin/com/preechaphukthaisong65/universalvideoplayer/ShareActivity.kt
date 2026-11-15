@@ -1,6 +1,7 @@
 package com.preechaphukthaisong65.universalvideoplayer
 
 import android.app.Activity
+import android.content.ClipData
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -24,8 +25,26 @@ class ShareActivity : Activity() {
                     putParcelableArrayListExtra(Intent.EXTRA_STREAM, streams)
                 }
             }
+            clipData = incoming.clipData ?: buildClipData(incoming)
         }
         startActivity(launch)
         finish()
+    }
+
+    private fun buildClipData(source: Intent): ClipData? {
+        val uris = when (source.action) {
+            Intent.ACTION_VIEW -> listOfNotNull(source.data)
+            Intent.ACTION_SEND -> listOfNotNull(
+                IntentCompat.getParcelableExtra(source, Intent.EXTRA_STREAM, Uri::class.java)
+            )
+            Intent.ACTION_SEND_MULTIPLE -> IntentCompat.getParcelableArrayListExtra(
+                source, Intent.EXTRA_STREAM, Uri::class.java
+            )?.distinct().orEmpty()
+            else -> emptyList()
+        }
+        val first = uris.firstOrNull() ?: return null
+        return ClipData.newUri(contentResolver, "Shared media", first).apply {
+            uris.drop(1).forEach { addItem(ClipData.Item(it)) }
+        }
     }
 }
