@@ -1,0 +1,2 @@
+-keep class androidx.media3.** { *; }
+-keep class com.preechaphukthaisong65.universalvideoplayer.data.** { *; }
