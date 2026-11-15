@@ -9,6 +9,8 @@ import com.preechaphukthaisong65.universalvideoplayer.player.PlayerSessionManage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 class PlayerApplication : Application() {
@@ -16,6 +18,7 @@ class PlayerApplication : Application() {
         private set
 
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     val database: PlayerDatabase by lazy {
         Room.databaseBuilder(this, PlayerDatabase::class.java, "universal-player.db").build()
     }
@@ -23,18 +26,44 @@ class PlayerApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         playerManager = PlayerSessionManager(this)
+        applicationScope.launch {
+            while (isActive) {
+                runCatching { persistCurrentProgress() }
+                delay(PROGRESS_SAVE_INTERVAL_MS)
+            }
+        }
     }
 
     fun recordPlayback(source: MediaSource) {
         applicationScope.launch {
+            val previous = database.historyDao().find(source.uri)
             database.historyDao().upsert(
                 PlaybackHistoryEntity(
                     uri = source.uri,
-                    title = source.title ?: "Untitled media",
-                    lastPositionMs = 0L,
+                    title = source.title?.take(250) ?: previous?.title ?: "Untitled media",
+                    lastPositionMs = previous?.lastPositionMs ?: 0L,
                     lastPlayedAt = System.currentTimeMillis()
                 )
             )
         }
+    }
+
+    private suspend fun persistCurrentProgress() {
+        val source = playerManager.currentMediaSource() ?: return
+        val snapshot = playerManager.snapshot()
+        val now = System.currentTimeMillis()
+        val existing = database.historyDao().find(source.uri)
+        database.historyDao().upsert(
+            PlaybackHistoryEntity(
+                uri = source.uri,
+                title = source.title?.take(250) ?: existing?.title ?: "Untitled media",
+                lastPositionMs = snapshot.positionMs.coerceAtLeast(0L),
+                lastPlayedAt = now
+            )
+        )
+    }
+
+    companion object {
+        private const val PROGRESS_SAVE_INTERVAL_MS = 5_000L
     }
 }
