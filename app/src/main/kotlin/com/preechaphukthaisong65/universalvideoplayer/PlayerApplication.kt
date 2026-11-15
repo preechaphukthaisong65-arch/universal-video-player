@@ -40,7 +40,7 @@ class PlayerApplication : Application() {
         if (!isPersistableLocalUri(source.uri)) return
         applicationScope.launch {
             val now = System.currentTimeMillis()
-            val title = source.title?.take(250)?.ifBlank { null } ?: "Untitled media"
+            val title = source.title?.take(250)?.takeIf { it.isNotBlank() } ?: "Untitled media"
             val dao = database.historyDao()
             dao.insertIfAbsent(
                 PlaybackHistoryEntity(
@@ -72,7 +72,7 @@ class PlayerApplication : Application() {
 
     private suspend fun persistProgress(source: MediaSource, positionMs: Long) {
         val now = System.currentTimeMillis()
-        val title = source.title?.take(250)?.ifBlank { null } ?: "Untitled media"
+        val title = source.title?.take(250)?.takeIf { it.isNotBlank() } ?: "Untitled media"
         val dao = database.historyDao()
         val position = positionMs.coerceAtLeast(0L)
         val updated = dao.updateProgress(source.uri, title, position, now)
