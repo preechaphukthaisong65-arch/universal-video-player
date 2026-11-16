@@ -8,7 +8,7 @@ plugins {
 
 val keystoreBase64 = providers.environmentVariable("ANDROID_KEYSTORE_BASE64").orNull
 val keystorePassword = providers.environmentVariable("ANDROID_KEYSTORE_PASSWORD").orNull
-val keyAliasValue = providers.environmentVariable("ANDROID_KEY_ALIAS").orNull
+val keyAliasValue = providers.environmentVariable("ANDROID_KEY_ALIAS").orNull?.trim()?.takeIf { it.isNotEmpty() }
 val keyPasswordValue = providers.environmentVariable("ANDROID_KEY_PASSWORD").orNull
 val releaseSigningReady = listOf(keystoreBase64, keystorePassword, keyAliasValue, keyPasswordValue).all { !it.isNullOrBlank() }
 val requireReleaseSigning = providers.gradleProperty("requireReleaseSigning").orNull == "true"
