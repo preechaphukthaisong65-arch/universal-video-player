@@ -52,12 +52,24 @@ jobs:
           printf '%s' "$BASE64_CLEAN" | base64 --decode > "$KEYSTORE"
           test -s "$KEYSTORE"
 
-          if ! KEY_LIST="$(keytool -list -keystore "$KEYSTORE" -storetype PKCS12 -storepass "$ANDROID_KEYSTORE_PASSWORD" 2>&1)"; then
+          if ! KEY_LIST="$(keytool -list -v -keystore "$KEYSTORE" -storetype PKCS12 -storepass "$ANDROID_KEYSTORE_PASSWORD" 2>&1)"; then
             echo "Keystore could not be opened. Check the Base64 secret and store password."
             printf '%s\n' "$KEY_LIST" | sed -E 's/.*([Pp]assword).*/[password diagnostic redacted]/'
             exit 1
           fi
-          DETECTED_ALIAS="$(printf '%s\n' "$KEY_LIST" | awk -F, '$3 ~ /PrivateKeyEntry/ {gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1); print $1}')"
+          # Parse verbose keytool records by their explicit labels. Do not split
+          # the compact listing on commas: the localized date contains commas.
+          DETECTED_ALIAS="$(printf '%s\n' "$KEY_LIST" | awk '
+            /^[[:space:]]*Alias name: / {
+              alias = $0
+              sub(/^[[:space:]]*Alias name: /, "", alias)
+              sub(/[[:space:]]+$/, "", alias)
+            }
+            /^[[:space:]]*Entry type: PrivateKeyEntry[[:space:]]*$/ {
+              if (alias != "") print alias
+              alias = ""
+            }
+          ')"
           ALIAS_COUNT="$(printf '%s\n' "$DETECTED_ALIAS" | awk 'NF {count++} END {print count+0}')"
           if [ "$ALIAS_COUNT" -ne 1 ]; then
             echo "Expected exactly one PrivateKeyEntry in the release keystore; found $ALIAS_COUNT. Refusing to guess the signing key."
