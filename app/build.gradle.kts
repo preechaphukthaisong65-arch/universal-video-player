@@ -8,7 +8,7 @@ plugins {
 
 val keystoreBase64 = providers.environmentVariable("ANDROID_KEYSTORE_BASE64").orNull
 val keystorePassword = providers.environmentVariable("ANDROID_KEYSTORE_PASSWORD").orNull
-val keyAliasValue = providers.environmentVariable("ANDROID_KEY_ALIAS").orNull
+val keyAliasValue = providers.environmentVariable("ANDROID_KEY_ALIAS").orNull?.trim()?.takeIf { it.isNotEmpty() }
 val keyPasswordValue = providers.environmentVariable("ANDROID_KEY_PASSWORD").orNull
 val releaseSigningReady = listOf(keystoreBase64, keystorePassword, keyAliasValue, keyPasswordValue).all { !it.isNullOrBlank() }
 val requireReleaseSigning = providers.gradleProperty("requireReleaseSigning").orNull == "true"
@@ -21,7 +21,12 @@ if (requireReleaseSigning && !releaseSigningReady) {
 if (releaseSigningReady) {
     val outputFile = generatedKeystore.get().asFile
     outputFile.parentFile.mkdirs()
-    val decodedKeystore = Base64.getMimeDecoder().decode(keystoreBase64)
+    val normalizedBase64 = keystoreBase64!!.filterNot(Char::isWhitespace)
+    val decodedKeystore = try {
+        Base64.getDecoder().decode(normalizedBase64)
+    } catch (exception: IllegalArgumentException) {
+        error("ANDROID_KEYSTORE_BASE64 contains invalid Base64 data.")
+    }
     require(decodedKeystore.isNotEmpty()) { "ANDROID_KEYSTORE_BASE64 decoded to an empty keystore." }
     outputFile.writeBytes(decodedKeystore)
 }

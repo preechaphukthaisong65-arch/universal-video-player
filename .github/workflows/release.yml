@@ -38,39 +38,60 @@ jobs:
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           set -euo pipefail
+          umask 077
+          export LC_ALL=C
           test -n "$ANDROID_KEYSTORE_BASE64"
           test -n "$ANDROID_KEYSTORE_PASSWORD"
-          test -n "$ANDROID_KEY_ALIAS"
           test -n "$ANDROID_KEY_PASSWORD"
 
           KEYSTORE="$RUNNER_TEMP/release-validation.p12"
-          BASE64_CLEAN="$(printf '%s' "$ANDROID_KEYSTORE_BASE64" | tr -cd 'A-Za-z0-9+/=')"
-          echo "Sanitized keystore Base64 length: ${#BASE64_CLEAN}"
+          trap 'rm -f "$KEYSTORE"' EXIT
+          BASE64_CLEAN="$(printf '%s' "$ANDROID_KEYSTORE_BASE64" | tr -d '[:space:]')"
           test -n "$BASE64_CLEAN"
           printf '%s' "$BASE64_CLEAN" | base64 --decode > "$KEYSTORE"
           test -s "$KEYSTORE"
 
-          if ! CERT_OUTPUT="$(keytool -list -v -keystore "$KEYSTORE" -storetype PKCS12 -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" 2>&1)"; then
-            echo "Keystore could not be opened. Check the Base64 secret, store password, and alias in GitHub Actions Secrets."
-            printf '%s\n' "$CERT_OUTPUT" | sed -E 's/.*([Pp]assword).*/[password diagnostic redacted]/'
+          if ! KEY_LIST="$(keytool -list -v -keystore "$KEYSTORE" -storetype PKCS12 -storepass:env ANDROID_KEYSTORE_PASSWORD 2>&1)"; then
+            echo "::error::Keystore validation failed. Check the Base64 value and store password; sensitive diagnostic output was suppressed."
+            exit 1
+          fi
+
+          DETECTED_ALIAS="$(printf '%s\n' "$KEY_LIST" | awk '
+            /^[[:space:]]*Alias name: / {
+              alias = $0
+              sub(/^[[:space:]]*Alias name: /, "", alias)
+              sub(/[[:space:]]+$/, "", alias)
+            }
+            /^[[:space:]]*Entry type: PrivateKeyEntry[[:space:]]*$/ {
+              if (alias != "") print alias
+              alias = ""
+            }
+          ')"
+          ALIAS_COUNT="$(printf '%s\n' "$DETECTED_ALIAS" | awk 'NF {count++} END {print count+0}')"
+          if [ "$ALIAS_COUNT" -ne 1 ]; then
+            echo "::error::Expected exactly one PrivateKeyEntry in the release keystore; found $ALIAS_COUNT. Refusing to guess the signing key."
+            exit 1
+          fi
+
+          printf 'ANDROID_KEY_ALIAS=%s\n' "$DETECTED_ALIAS" >> "$GITHUB_ENV"
+          if ! CERT_OUTPUT="$(keytool -list -v -keystore "$KEYSTORE" -storetype PKCS12 -storepass:env ANDROID_KEYSTORE_PASSWORD -alias "$DETECTED_ALIAS" 2>&1)"; then
+            echo "::error::Detected private-key alias could not be inspected; sensitive diagnostic output was suppressed."
             exit 1
           fi
           ACTUAL_CERT_SHA256="$(printf '%s\n' "$CERT_OUTPUT" | awk -F': ' '/SHA256:/ {gsub(/:/, "", $2); print tolower($2); exit}')"
           if [ -z "$ACTUAL_CERT_SHA256" ] || [ "$ACTUAL_CERT_SHA256" != "$EXPECTED_CERT_SHA256" ]; then
-            echo "Keystore certificate fingerprint mismatch. Expected $EXPECTED_CERT_SHA256, received ${ACTUAL_CERT_SHA256:-empty}."
+            echo "::error::Keystore certificate fingerprint mismatch. Expected $EXPECTED_CERT_SHA256, received ${ACTUAL_CERT_SHA256:-empty}."
             exit 1
           fi
-          rm -f "$KEYSTORE"
+          echo "Keystore contains exactly one private-key entry and its certificate fingerprint matches."
 
       - name: Build signed APK and Android App Bundle
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: gradle --no-daemon -PrequireReleaseSigning=true :app:lintRelease :app:assembleRelease :app:bundleRelease
 

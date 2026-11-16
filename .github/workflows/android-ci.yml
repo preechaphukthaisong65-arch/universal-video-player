@@ -2,9 +2,9 @@ name: Android CI
 
 on:
   push:
-    branches: [main, "feature/**"]
+    branches: [main, "feature/**", "fix/**"]
   pull_request:
-    branches: [main]
+    branches: [main, feature/release-completion]
   workflow_dispatch:
 
 permissions:
@@ -12,12 +12,12 @@ permissions:
 
 concurrency:
   group: android-ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 35
     env:
       ANDROID_HOME: /usr/local/lib/android/sdk
     steps:
@@ -39,6 +39,41 @@ jobs:
         run: gradle --no-daemon :domain:test :app:lintDebug
       - name: Build debug APK
         run: gradle --no-daemon :app:assembleDebug
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: universal-video-player-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: warn
+
+  instrumentation-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+      - name: Verify and enable KVM access
+        run: |
+          set -euo pipefail
+          if [[ ! -c /dev/kvm ]]; then
+            echo "::error::This runner does not expose /dev/kvm; refusing to start a software-emulated Android device."
+            exit 1
+          fi
+          sudo chmod 666 /dev/kvm
+          if [[ ! -r /dev/kvm || ! -w /dev/kvm ]]; then
+            echo "::error::KVM exists but is not readable and writable by the runner."
+            exit 1
+          fi
+          ls -l /dev/kvm
       - name: Run Android instrumentation tests
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -46,17 +81,18 @@ jobs:
           target: google_apis
           arch: x86_64
           profile: pixel_2
+          cores: 2
           disable-animations: true
-          emulator-boot-timeout: 900
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
+          disable-linux-hw-accel: false
+          emulator-boot-timeout: 600
+          emulator-options: -no-window -gpu swiftshader_indirect -no-audio -no-boot-anim -camera-back none
           script: gradle --no-daemon connectedDebugAndroidTest
-      - name: Upload debug APK and instrumentation test reports
+      - name: Upload instrumentation test reports
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: universal-video-player-debug-and-test-reports
+          name: universal-video-player-instrumentation-reports
           path: |
-            app/build/outputs/apk/debug/*.apk
             app/build/reports/androidTests/connected/**
             app/build/outputs/androidTest-results/connected/**
           if-no-files-found: warn
