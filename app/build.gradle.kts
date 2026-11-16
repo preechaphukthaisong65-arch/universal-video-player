@@ -21,7 +21,12 @@ if (requireReleaseSigning && !releaseSigningReady) {
 if (releaseSigningReady) {
     val outputFile = generatedKeystore.get().asFile
     outputFile.parentFile.mkdirs()
-    val decodedKeystore = Base64.getMimeDecoder().decode(keystoreBase64)
+    val normalizedBase64 = keystoreBase64!!.filterNot(Char::isWhitespace)
+    val decodedKeystore = try {
+        Base64.getDecoder().decode(normalizedBase64)
+    } catch (exception: IllegalArgumentException) {
+        error("ANDROID_KEYSTORE_BASE64 contains invalid Base64 data.")
+    }
     require(decodedKeystore.isNotEmpty()) { "ANDROID_KEYSTORE_BASE64 decoded to an empty keystore." }
     outputFile.writeBytes(decodedKeystore)
 }
